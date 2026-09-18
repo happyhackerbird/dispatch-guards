@@ -1,5 +1,5 @@
 {
   "name": "dispatch-guards",
-  "version": "0.11.27",
+  "version": "0.11.28",
   "description": "The dispatch discipline as a skill plus its mechanical guards. Skills: dispatch (decision-complete briefs, closing-report + roadmap forms, dispatcher duties, tier-readiness register, Codex routing — the operational corpus' dispatch half), executor (the receiving side: conduct of execution, under-report principle, devbook form + checker) and worktree (portable git-worktree/git-hook mechanics). Guards: dispatch-skill load gate, model gate (deny/ask tiers, escalation lane, mandatory <model>- name prefix), subagent push gate, push-claim reminder, amend gate, worktree-config gate (staged — shared-config writes from inside a linked worktree), brief/report reminders, closing-report enforcer, message-payload gate, report-form gate (staged), writer-claims gate (staged), writer-reservation gate (staged — reserves the working COPY, warns when a commit could absorb another writer's uncommitted hunks), discovery-volume reminder, dispatch log. Every fire lands in a JSONL fire log; per-guard warn/deny staging via guard_modes. Mechanism ships here; site policy lives in ~/.claude/dispatch-guards.json."
 }

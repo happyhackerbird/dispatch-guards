@@ -381,7 +381,8 @@ def dispatch_tier(tool_input: dict) -> str:
     tier, since a light dispatch can burn the wrong quota or report
     into the void as easily as a heavy one.
 
-    read — subagent_type in LIGHT_READ_TYPES.
+    read — subagent_type in LIGHT_READ_TYPES, or any type whose brief
+      carries `Writes: none` and no _LIGHT_HEAVY_RE word.
     small-write — the brief carries a `Writes: <path>[, <path>]` line
       naming 1..LIGHT_MAX_WRITES paths, the prompt stays under
       LIGHT_MAX_PROMPT_CHARS, and it names nothing in _LIGHT_HEAVY_RE.
@@ -399,10 +400,18 @@ def dispatch_tier(tool_input: dict) -> str:
     if tool_input.get("subagent_type") in LIGHT_READ_TYPES:
         return "read"
     prompt = tool_input.get("prompt") or ""
-    if not isinstance(prompt, str) or len(prompt) > LIGHT_MAX_PROMPT_CHARS:
+    if not isinstance(prompt, str):
         return "full"
     m = _LIGHT_WRITES_RE.findall(prompt)
     if len(m) != 1:
+        return "full"
+    if _re.fullmatch(r"none\b.*", m[0].strip(), _re.IGNORECASE):
+        # Declared read-only, any agent type (2026-09-19: a Codex
+        # review via codex:codex-rescue had no light path — a writing
+        # type doing read-only work had nothing to declare). No length
+        # cap: reviews carry context; the heavy-word check still holds.
+        return "full" if _LIGHT_HEAVY_RE.search(prompt) else "read"
+    if len(prompt) > LIGHT_MAX_PROMPT_CHARS:
         return "full"
     paths = [p.strip() for p in m[0].split(",") if p.strip()]
     if not 1 <= len(paths) <= LIGHT_MAX_WRITES:
@@ -416,11 +425,11 @@ def light_tier_hint() -> str:
     """One sentence appended to form-lane denies so the cheap path is
     visible at the moment of need, not only in docs."""
     return (
-        " Small task? Skip the form: a read-type dispatch (Explore, "
-        "Plan, …) or a brief under "
+        " Read-only? Add a line `Writes: none` (any agent type) and "
+        "retry. Small edit? A brief under "
         f"{LIGHT_MAX_PROMPT_CHARS} chars with one line `Writes: "
-        f"<path>[, <path>]` (max {LIGHT_MAX_WRITES}) and no "
-        "push/publish/deploy/commit/DB/delete words is exempt."
+        f"<path>[, <path>]` (max {LIGHT_MAX_WRITES}). Either way no "
+        "push/publish/deploy/commit/DB/delete words."
     )
 
 

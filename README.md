@@ -149,7 +149,8 @@ generic reminder wording). Site policy lives in
   (default 6).
 - `light_tiers` — dispatch tiers (default `true`). A **read**
   dispatch (`subagent_type` Explore, Plan, claude-code-guide, or a
-  feature-dev explorer/architect/reviewer) or a **small-write**
+  feature-dev explorer/architect/reviewer, or any type whose brief
+  carries `Writes: none` and no heavy word below) or a **small-write**
   dispatch (brief under 2000 chars, one `Writes: <path>[, <path>]`
   line naming at most two paths, and no push / publish / deploy /
   commit / release / merge / DB / artifact / served / email /
