@@ -305,6 +305,7 @@ _DEFAULTS: dict = {
     "discovery_volume_bytes": 50000,
     "guard_modes": {},
     "write_claim_ttl_hours": 6,
+    "light_tiers": True,
 }
 _POLICY_CACHE: dict | None = None
 _POLICY_META: dict | None = None
@@ -343,6 +344,84 @@ def _reset_policy_cache() -> None:
     global _POLICY_CACHE, _POLICY_META
     _POLICY_CACHE = None
     _POLICY_META = None
+
+
+# ── Dispatch tiers ───────────────────────────────────────────────────────
+import re as _re  # noqa: E402
+
+# Types whose harness tool roster is built for reading. Explore and
+# claude-code-guide still carry Bash — accepted residue: a type that
+# advertises read-only and then writes is a harness-level surprise the
+# brief form would not have caught either.
+LIGHT_READ_TYPES = frozenset({
+    "Explore", "Plan", "claude-code-guide",
+    "feature-dev:code-explorer", "feature-dev:code-architect",
+    "feature-dev:code-reviewer",
+})
+LIGHT_MAX_WRITES = 2
+LIGHT_MAX_PROMPT_CHARS = 2000
+_LIGHT_WRITES_RE = _re.compile(r"^\s*writes:\s*(\S.*)$",
+                               _re.IGNORECASE | _re.MULTILINE)
+# Any of these words in a small-write brief sends it to the full tier:
+# the outward, shared-state and irreversible class the full brief form
+# exists for. Word-boundary match — "commit" hits, "committee" not.
+_LIGHT_HEAVY_RE = _re.compile(
+    r"\b(push\w*|publish\w*|deploy\w*|commit\w*|release\w*|merge\w*|"
+    r"database|db|sqlite|supabase|postgres\w*|migrat\w*|prod|"
+    r"production|artifact\w*|served|serve|email\w*|"
+    r"delete\w*|drop|rm)\b",
+    _re.IGNORECASE)
+
+
+def dispatch_tier(tool_input: dict) -> str:
+    """"read" | "small-write" | "full" — how much brief discipline a
+    dispatch owes. Light tiers are exempt from the skill-load gate and
+    brief-reminder's form lanes (tail, sections, commit plan, devbook
+    pin); the model gate and the mailbox channel lane apply to every
+    tier, since a light dispatch can burn the wrong quota or report
+    into the void as easily as a heavy one.
+
+    read — subagent_type in LIGHT_READ_TYPES.
+    small-write — the brief carries a `Writes: <path>[, <path>]` line
+      naming 1..LIGHT_MAX_WRITES paths, the prompt stays under
+      LIGHT_MAX_PROMPT_CHARS, and it names nothing in _LIGHT_HEAVY_RE.
+      No commit: the dispatcher reviews and commits.
+    full — everything else, and every dispatch when site policy sets
+      `light_tiers: false`.
+
+    Occasion (2026-09-18, scope-agent): a one-file draft swap took four
+    blocked retries — skill gate, tail, sections, model — for a brief
+    longer than the work. Fails toward "full" on any doubt."""
+    if not policy().get("light_tiers", True):
+        return "full"
+    if not isinstance(tool_input, dict):
+        return "full"
+    if tool_input.get("subagent_type") in LIGHT_READ_TYPES:
+        return "read"
+    prompt = tool_input.get("prompt") or ""
+    if not isinstance(prompt, str) or len(prompt) > LIGHT_MAX_PROMPT_CHARS:
+        return "full"
+    m = _LIGHT_WRITES_RE.findall(prompt)
+    if len(m) != 1:
+        return "full"
+    paths = [p.strip() for p in m[0].split(",") if p.strip()]
+    if not 1 <= len(paths) <= LIGHT_MAX_WRITES:
+        return "full"
+    if _LIGHT_HEAVY_RE.search(prompt):
+        return "full"
+    return "small-write"
+
+
+def light_tier_hint() -> str:
+    """One sentence appended to form-lane denies so the cheap path is
+    visible at the moment of need, not only in docs."""
+    return (
+        " Small task? Skip the form: a read-type dispatch (Explore, "
+        "Plan, …) or a brief under "
+        f"{LIGHT_MAX_PROMPT_CHARS} chars with one line `Writes: "
+        f"<path>[, <path>]` (max {LIGHT_MAX_WRITES}) and no "
+        "push/publish/deploy/commit/DB/delete words is exempt."
+    )
 
 
 def doc_ref(section: str) -> str:

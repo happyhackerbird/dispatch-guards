@@ -28,9 +28,9 @@ All three are model-invoked — they trigger from their descriptions;
 
 | Guard | Event | What it enforces |
 |---|---|---|
-| `dispatch-skill-gate` | PreToolUse Agent\|Task\|Workflow | the `dispatch` skill must be loaded in the dispatching context's transcript (session-scoped) before any dispatch — replaces the old read-by-convention |
+| `dispatch-skill-gate` | PreToolUse Agent\|Task\|Workflow | the `dispatch` skill must be loaded in the dispatching context's transcript (session-scoped) before any dispatch — replaces the old read-by-convention; read-type and declared small-write dispatches are exempt (`light_tiers`) |
 | `agent-model-gate` | PreToolUse Agent\|Task\|Workflow | explicit `model` on generic agent types (still denies); a missing or wrongly-prefixed `<model>-` NAME is now **rewritten**, not denied — `hookSpecificOutput.updatedInput` sets `name` to `<model>-<slug>` (slug from the existing name when present, else the description, slugified; 2026-09-15 verb conversion, guard-rewrite arc item 1) so the call proceeds instead of bouncing back for recomposition; a legacy `<model>: ` title prefix, if present, must still mirror the model field and denies on mismatch — that check takes precedence over a pending name rewrite; per-policy deny/ask tiers; Workflow launches always ask; **escalation lane** — an ask-tier dispatch *from a subagent* is denied, not asked: escalation is the dispatcher's decision, the subagent returns the question |
-| `brief-reminder` | PreToolUse Agent\|Task | **denies on the computable slice of §§1-2**, reminds on the judgment half. Three HARD deny lanes, all `Agent`-only, unaffected by `guard_modes`: a MAILBOX-lane (named) dispatch whose prompt names no report channel (a named agent's final text reaches no one); a pasted tail whose channel line contradicts the dispatch's lane — which `name` alone decides — either direction; an execution-tail brief missing its §1 grounding-basis or write-boundaries section. A brief lacking the §2 tail block — searched in the prompt *and* in any brief FILE the prompt names — is now MODE-AWARE and split by whether the brief's body DECLARES it writes (a write-boundary or commit-plan marker, the same body-marker idiom the section lane already uses): the DECIDABLE class is **rewritten**, not denied — `hookSpecificOutput.updatedInput` appends the shipped EXECUTION tail from `references/forms.md`, channel line filled from `name` presence, under both `deny` and `warn` (the repair is the action, not a punishment grade; 2026-09-15 verb conversion, guard-rewrite arc item 2); the AMBIGUOUS class (no such marker — read-only is never positively decided or auto-appended) keeps the deny, now demotable to `warn` for the first time. An execution-tail brief carrying no §1 commit-plan section stays a mode-aware deny (promoted from staged WARN 2026-09-15 on its fire record — 39 post-repair warn fires, no false fire recorded, df-238). Plus one staged WARN lane, ordered last so it can shadow no deny: an execution-tail brief naming a registered class devbook with no 64-hex fingerprint pin. The `guard_modes` key `brief-reminder` now governs THREE fire()-routed lanes (the missing-tail ambiguous-class exit, the promoted commit-plan deny, and the staged pin warn) — a site override moves all three together; `off` silences the missing-tail lane entirely for both its classes. Otherwise one reminder line before every dispatch (brief decision-complete? report channel named?), plus a non-blocking base advisory on `isolation: "worktree"` calls |
+| `brief-reminder` | PreToolUse Agent\|Task | **denies on the computable slice of §§1-2**, reminds on the judgment half. Light-tier dispatches (`light_tiers`, below) skip every form lane and pass after the channel and tail-mismatch checks. Three HARD deny lanes, all `Agent`-only, unaffected by `guard_modes`: a MAILBOX-lane (named) dispatch whose prompt names no report channel (a named agent's final text reaches no one); a pasted tail whose channel line contradicts the dispatch's lane — which `name` alone decides — either direction; an execution-tail brief missing its §1 grounding-basis or write-boundaries section. A brief lacking the §2 tail block — searched in the prompt *and* in any brief FILE the prompt names — is now MODE-AWARE and split by whether the brief's body DECLARES it writes (a write-boundary or commit-plan marker, the same body-marker idiom the section lane already uses): the DECIDABLE class is **rewritten**, not denied — `hookSpecificOutput.updatedInput` appends the shipped EXECUTION tail from `references/forms.md`, channel line filled from `name` presence, under both `deny` and `warn` (the repair is the action, not a punishment grade; 2026-09-15 verb conversion, guard-rewrite arc item 2); the AMBIGUOUS class (no such marker — read-only is never positively decided or auto-appended) keeps the deny, now demotable to `warn` for the first time. An execution-tail brief carrying no §1 commit-plan section stays a mode-aware deny (promoted from staged WARN 2026-09-15 on its fire record — 39 post-repair warn fires, no false fire recorded, df-238). Plus one staged WARN lane, ordered last so it can shadow no deny: an execution-tail brief naming a registered class devbook with no 64-hex fingerprint pin. The `guard_modes` key `brief-reminder` now governs THREE fire()-routed lanes (the missing-tail ambiguous-class exit, the promoted commit-plan deny, and the staged pin warn) — a site override moves all three together; `off` silences the missing-tail lane entirely for both its classes. Otherwise one reminder line before every dispatch (brief decision-complete? report channel named?), plus a non-blocking base advisory on `isolation: "worktree"` calls |
 | `subagent-push-gate` | PreToolUse Bash | denies `git`/`gh` push in a subagent context — subagents commit unpushed, the dispatcher pushes after verification |
 | `push-claim-reminder` | PreToolUse Bash | main-session push lanes: **denies a fused push** — one sharing its invocation with `git commit` or `git log`, since the read-then-decide seam only exists across separate invocations — and otherwise reminds to claim each outgoing commit (`git log origin/<branch>..<branch>`); subagent context excluded, `subagent-push-gate` already denies it |
 | `amend-gate` | PreToolUse Bash | `git commit --amend` on a shared working copy: denies it flatly in a subagent context (amend is COMMIT-granular — it can swallow a co-writer's landed commit at HEAD; make a new commit instead), reminds in the main session (check `git log -1 --format=%(trailers)` shows your own trailer before amending) |
@@ -121,7 +121,8 @@ generic reminder wording). Site policy lives in
   "max_message_chars": 3000,
   "discovery_volume_bytes": 50000,
   "guard_modes": {"writer-claims-gate": "warn"},
-  "write_claim_ttl_hours": 6
+  "write_claim_ttl_hours": 6,
+  "light_tiers": true
 }
 ```
 
@@ -146,6 +147,17 @@ generic reminder wording). Site policy lives in
   writer-claims lanes).
 - `write_claim_ttl_hours` — writer-claims freshness window
   (default 6).
+- `light_tiers` — dispatch tiers (default `true`). A **read**
+  dispatch (`subagent_type` Explore, Plan, claude-code-guide, or a
+  feature-dev explorer/architect/reviewer) or a **small-write**
+  dispatch (brief under 2000 chars, one `Writes: <path>[, <path>]`
+  line naming at most two paths, and no push / publish / deploy /
+  commit / release / merge / DB / artifact / served / email /
+  delete word) skips `dispatch-skill-gate` and brief-reminder's form
+  lanes (tail, sections, commit plan, devbook pin). The model gate
+  and the mailbox channel lane still apply to every tier. Each light
+  pass logs a `light-read` / `light-small-write` fire-log line.
+  `false` puts every dispatch on the full tier.
 
 ## What this does not ship
 

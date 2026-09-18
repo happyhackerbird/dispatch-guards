@@ -62,7 +62,8 @@ import re
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
-from _dispatch_common import deny, fire, fire_log, guard_mode, policy  # noqa: E402
+from _dispatch_common import (deny, dispatch_tier, fire, fire_log,  # noqa: E402
+                              guard_mode, light_tier_hint, policy)
 
 _SOURCE = "dispatch-guards/brief-reminder"
 
@@ -276,6 +277,7 @@ def missing_tail_deny_text() -> str:
         "`name` alone decides (named = mailbox, unnamed = background "
         "task) — or point the prompt at a brief FILE that "
         "carries the tail, and retry."
+        + light_tier_hint()
     )
 
 
@@ -448,6 +450,7 @@ def missing_sections_deny_text(payload: dict) -> str:
         "building) and a write-boundaries section (paths owned, "
         "targeted git add). Add the missing section(s) to the brief "
         "and retry."
+        + light_tier_hint()
     )
 
 
@@ -515,6 +518,7 @@ def missing_commit_plan_deny_text() -> str:
         "integration only, and a plugin-payload brief names who "
         "bumps the manifest. 'none' (no such guard) is a valid "
         "filling; silence is not. Add the section and retry."
+        + light_tier_hint()
     )
 
 
@@ -926,6 +930,27 @@ def main() -> int:
     # which two sessions misattributed to a Claude Code permission bug.
     if missing_channel(payload):
         deny(deny_text(payload), source=_SOURCE, payload=payload)
+    if tail_mode_mismatch(payload):
+        deny(tail_mode_mismatch_deny_text(payload), source=_SOURCE,
+             payload=payload)
+    # Light tiers (2026-09-18, _dispatch_common.dispatch_tier): a
+    # read-type or declared small-write dispatch skips every FORM lane
+    # below — tail, sections, commit plan, devbook pin. The channel
+    # lane above still applies to every tier. Logged so the relief's
+    # use is countable in the fire-rate review like any lane.
+    tier = dispatch_tier(payload.get("tool_input") or {})
+    if payload.get("tool_name") == "Agent" and tier != "full":
+        fire_log(_SOURCE, "light-" + tier,
+                 f"light tier {tier}: form lanes skipped", payload)
+        print(json.dumps({
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "additionalContext": (
+                    f"Dispatch tier: {tier} — brief form lanes skipped. "
+                    "You still verify the result before relying on it."),
+            }
+        }))
+        return 0
     # MODE-AWARE since 2026-09-15 (dg-46, guard-rewrite arc item 2) —
     # a verb conversion carrying this lane's existing record forward:
     # it was never staged (hard deny from the day it shipped, like
@@ -970,9 +995,6 @@ def main() -> int:
             # pass: fall back to the mode-aware deny/warn exit.
             fire(missing_tail_deny_text(), source=_SOURCE, payload=payload,
                  default_mode="deny")
-    if tail_mode_mismatch(payload):
-        deny(tail_mode_mismatch_deny_text(payload), source=_SOURCE,
-             payload=payload)
     if missing_sections(payload):
         deny(missing_sections_deny_text(payload), source=_SOURCE,
              payload=payload)

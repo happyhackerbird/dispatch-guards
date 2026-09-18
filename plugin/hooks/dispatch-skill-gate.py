@@ -48,7 +48,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.realpath(__file__)))
-from _dispatch_common import fire  # noqa: E402
+from _dispatch_common import dispatch_tier, fire, light_tier_hint  # noqa: E402
 
 _SOURCE = "dispatch-guards/dispatch-skill-gate"
 
@@ -143,6 +143,7 @@ def deny_text() -> str:
         f"{_skill_md_path()}) — then retry the dispatch. The skill "
         "carries the brief and report discipline (§§1-2) this "
         "dispatch is checked against; one load covers the session."
+        + light_tier_hint()
     )
 
 
@@ -158,6 +159,11 @@ def main() -> int:
         return 0  # fail-open: nothing to scan
     scan_path = resolve_scan_transcript(transcript_path,
                                         payload.get("agent_id", ""))
+    # Light tiers (2026-09-18, _dispatch_common.dispatch_tier): a
+    # read-type or declared small-write dispatch owes no brief form,
+    # so the skill that teaches the form is not a precondition.
+    if dispatch_tier(payload.get("tool_input") or {}) != "full":
+        return 0
     if not skill_loaded(scan_path):
         # mode-aware deny: logged, warn-stageable via guard_modes
         fire(deny_text(), source=_SOURCE, payload=payload)
